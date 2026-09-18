@@ -52,7 +52,7 @@ MyWalt/
 
 1. **Clone the repository**:
    ```bash
-   git clone https://github.com/YOUR-USERNAME/MyWalt.git
+   git clone https://github.com/prathmkhedkar63-oss/MyWalt.git
    cd MyWalt
    ```
 

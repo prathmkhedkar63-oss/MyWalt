@@ -7,7 +7,7 @@ Thank you for your interest in contributing to **MyWalt**! We welcome contributi
 1. **Fork the repository** on GitHub.
 2. **Clone your fork** locally:
    ```bash
-   git clone https://github.com/YOUR-USERNAME/MyWalt.git
+   git clone https://github.com/prathmkhedkar63-oss/MyWalt.git
    cd MyWalt
    ```
 3. **Set up a virtual environment**:
