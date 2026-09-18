@@ -1,0 +1,525 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MyWalt - Secure PC Remote Control</title>
+    <!-- Google Fonts & FontAwesome Icons -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&family=Fira+Code:wght@400;500&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link rel="stylesheet" href="/static/style.css">
+</head>
+<body class="light-theme">
+
+    <!-- GLOBAL DRAG & DROP OVERLAY -->
+    <div id="global-drag-overlay" class="global-drag-overlay hidden">
+        <div class="drag-drop-box">
+            <i class="fa-solid fa-cloud-arrow-up drag-icon-animated"></i>
+            <h2>Drop files anywhere to upload</h2>
+            <p>Your files will be securely uploaded to the current directory</p>
+        </div>
+    </div>
+
+    <!-- LOGIN MODAL OVERLAY -->
+    <div id="login-modal" class="modal-overlay active">
+        <div class="modal-card login-card">
+            <div class="brand-header">
+                <div class="brand-logo-circle">
+                    <i class="fa-solid fa-vault"></i>
+                </div>
+                <h2>MyWalt Remote Vault</h2>
+                <p>Enter Master Password to access PC files</p>
+            </div>
+            <form id="login-form">
+                <div class="input-group">
+                    <label for="login-password"><i class="fa-solid fa-lock"></i> Master Password</label>
+                    <input type="password" id="login-password" placeholder="Enter password..." required autofocus>
+                    <small class="default-hint">Default password is <code>admin</code></small>
+                </div>
+                <div id="login-error" class="error-banner hidden"></div>
+                <button type="submit" class="btn btn-primary btn-block">
+                    <i class="fa-solid fa-arrow-right-to-bracket"></i> Unlock System
+                </button>
+            </form>
+        </div>
+    </div>
+
+    <!-- MAIN APP CONTAINER -->
+    <div id="app" class="app-container hidden">
+        
+        <!-- LEFT SIDEBAR -->
+        <aside class="sidebar">
+            <div class="sidebar-top">
+                <div class="brand-logo">
+                    <div class="logo-box"><i class="fa-solid fa-vault"></i></div>
+                    <span class="logo-name">MyWalt</span>
+                </div>
+
+                <div class="sidebar-nav">
+                    <!-- PINNED FAVORITES -->
+                    <div class="nav-section-title"><i class="fa-solid fa-star text-warning"></i> Pinned Favorites</div>
+                    <div id="favorites-nav" class="tree-nav-container">
+                        <!-- Dynamic favorites -->
+                    </div>
+
+                    <!-- DRIVES & SHORTCUTS -->
+                    <div class="nav-section-title" style="margin-top: 15px;"><i class="fa-solid fa-hard-drive"></i> My PC Drives</div>
+                    <div id="tree-nav" class="tree-nav-container">
+                        <!-- Dynamic drive and shortcut tree items -->
+                    </div>
+                </div>
+            </div>
+
+            <div class="sidebar-bottom">
+                <div class="storage-card" id="storage-sidebar-card">
+                    <div class="storage-header">
+                        <span class="storage-label">System Storage</span>
+                        <span id="storage-pct" class="storage-pct">0%</span>
+                    </div>
+                    <div class="storage-bar">
+                        <div id="storage-fill" class="storage-fill" style="width: 0%;"></div>
+                    </div>
+                    <div id="storage-meta" class="storage-meta">Calculating storage...</div>
+                </div>
+
+                <div class="sidebar-action-buttons">
+                    <button id="btn-sidebar-settings" class="sidebar-settings-btn" title="Settings">
+                        <i class="fa-solid fa-gear"></i> Settings
+                    </button>
+                </div>
+            </div>
+        </aside>
+
+        <!-- MAIN WRAPPER -->
+        <div class="main-wrapper">
+            
+            <!-- TOP NAVBAR -->
+            <header class="top-navbar">
+                <div class="search-container">
+                    <i class="fa-solid fa-magnifying-glass search-icon"></i>
+                    <input type="text" id="search-input" placeholder="Search files or press Ctrl+F..." autocomplete="off">
+                    <button id="btn-search-mode-toggle" class="search-mode-pill" title="Toggle Search Mode: File Name vs Full-Text Content">
+                        <i class="fa-solid fa-file-lines"></i> <span id="search-mode-label">Name Search</span>
+                    </button>
+                    <button id="search-clear-btn" class="icon-btn hidden" title="Clear Search"><i class="fa-solid fa-xmark"></i></button>
+                </div>
+
+                <div class="nav-user-actions">
+                    <button id="btn-remote-pc" class="icon-btn-round text-danger" title="Live Remote PC Control">
+                        <i class="fa-solid fa-desktop"></i>
+                    </button>
+
+                    <button id="btn-sys-dash" class="icon-btn-round text-primary" title="System Dashboard & Power Controls">
+                        <i class="fa-solid fa-gauge-high"></i>
+                    </button>
+
+                    <button id="btn-web-terminal" class="icon-btn-round text-success" title="Web Terminal Console">
+                        <i class="fa-solid fa-terminal"></i>
+                    </button>
+
+                    <button id="btn-storage-analyzer" class="icon-btn-round text-warning" title="Folder Storage Analyzer">
+                        <i class="fa-solid fa-chart-pie"></i>
+                    </button>
+
+                    <button id="btn-theme-toggle" class="icon-btn-round" title="Toggle Light/Dark Theme">
+                        <i class="fa-solid fa-moon"></i>
+                    </button>
+
+                    <div class="user-badge" title="Master Admin Session">
+                        <div class="avatar"><i class="fa-solid fa-user-shield"></i></div>
+                        <div class="user-info">
+                            <span class="user-name">Master Admin</span>
+                            <span class="user-role">Host PC</span>
+                        </div>
+                    </div>
+
+                    <button id="btn-logout" class="icon-btn-round btn-danger-icon" title="Logout">
+                        <i class="fa-solid fa-right-from-bracket"></i>
+                    </button>
+                </div>
+            </header>
+
+            <!-- TOOLBAR & BREADCRUMBS -->
+            <div class="sub-header">
+                <div class="breadcrumbs-bar">
+                    <button id="btn-up" class="nav-circle-btn" title="Parent Folder"><i class="fa-solid fa-arrow-up"></i></button>
+                    <button id="btn-refresh" class="nav-circle-btn" title="Refresh Directory"><i class="fa-solid fa-rotate"></i></button>
+                    <button id="btn-pin-fav" class="nav-circle-btn text-warning" title="Pin / Unpin Favorite Folder"><i class="fa-regular fa-star"></i></button>
+                    <div id="breadcrumbs" class="breadcrumbs-list">
+                        <!-- Breadcrumb items rendered here -->
+                    </div>
+                </div>
+
+                <div class="sub-header-actions">
+                    <!-- CATEGORY FILTER PILLS -->
+                    <div class="filter-pills-bar">
+                        <button class="filter-pill active" data-cat="all">All</button>
+                        <button class="filter-pill" data-cat="image"><i class="fa-solid fa-image"></i> Images</button>
+                        <button class="filter-pill" data-cat="video"><i class="fa-solid fa-film"></i> Videos</button>
+                        <button class="filter-pill" data-cat="audio"><i class="fa-solid fa-music"></i> Audio</button>
+                        <button class="filter-pill" data-cat="document"><i class="fa-solid fa-file-pdf"></i> Docs</button>
+                        <button class="filter-pill" data-cat="code"><i class="fa-solid fa-code"></i> Code</button>
+                        <button class="filter-pill" data-cat="archive"><i class="fa-solid fa-file-zipper"></i> Archives</button>
+                    </div>
+
+                    <div class="sort-wrapper">
+                        <label for="sort-select">Sort:</label>
+                        <select id="sort-select" class="custom-select">
+                            <option value="name">Name</option>
+                            <option value="size">Size</option>
+                            <option value="date">Date Modified</option>
+                            <option value="type">Type</option>
+                        </select>
+                    </div>
+
+                    <div class="action-buttons-group">
+                        <button id="btn-paste" class="btn btn-sm btn-primary hidden" title="Paste copied or cut items (Ctrl+V)">
+                            <i class="fa-solid fa-paste"></i> Paste (<span id="paste-count">0</span>)
+                        </button>
+                        <button id="btn-download-zip" class="btn btn-sm btn-secondary" title="Download current folder or selected files as ZIP">
+                            <i class="fa-solid fa-file-zipper"></i> Download ZIP
+                        </button>
+                    </div>
+
+                    <div class="view-mode-toggle">
+                        <button id="btn-grid-view" class="mode-btn active" title="Grid View"><i class="fa-solid fa-grip-vertical"></i></button>
+                        <button id="btn-list-view" class="mode-btn" title="List View"><i class="fa-solid fa-list"></i></button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- SEARCH STATUS BANNER -->
+            <div id="search-banner" class="search-banner hidden">
+                <span><i class="fa-solid fa-bolt text-warning"></i> Search results for "<strong id="search-query-text"></strong>" (<span id="search-count-text">0</span> matches)</span>
+                <button id="btn-close-search" class="btn btn-sm btn-secondary"><i class="fa-solid fa-xmark"></i> Exit Search</button>
+            </div>
+
+            <!-- MAIN FILE CONTAINER -->
+            <main id="main-content" class="main-content">
+                
+                <!-- FOLDERS SECTION -->
+                <section id="folders-section" class="content-section">
+                    <div class="section-header" id="folders-header">
+                        <span class="section-title">Folders <span id="folders-count" class="badge-count">0</span></span>
+                        <i class="fa-solid fa-chevron-down section-arrow"></i>
+                    </div>
+                    <div id="folders-grid" class="folders-grid grid-mode">
+                        <!-- Folder cards rendered here -->
+                    </div>
+                </section>
+
+                <!-- FILES SECTION -->
+                <section id="files-section" class="content-section">
+                    <div class="section-header" id="files-header">
+                        <span class="section-title">Files <span id="files-count" class="badge-count">0</span></span>
+                        <i class="fa-solid fa-chevron-down section-arrow"></i>
+                    </div>
+                    <div id="files-grid" class="files-grid grid-mode">
+                        <!-- File cards rendered here -->
+                    </div>
+                </section>
+
+            </main>
+
+            <!-- STATUS BAR -->
+            <footer class="footer-statusbar">
+                <span id="status-count">0 items</span>
+                <span id="status-path" class="status-path-code">C:\</span>
+            </footer>
+        </div>
+    </div>
+
+    <!-- FLOATING ACTION BUTTON (+) -->
+    <div id="fab-container" class="fab-container">
+        <button id="fab-main" class="fab-btn" title="Add / Upload">
+            <i class="fa-solid fa-plus"></i>
+        </button>
+        <div id="fab-menu" class="fab-menu hidden">
+            <button id="fab-upload" class="fab-item"><i class="fa-solid fa-cloud-arrow-up"></i> Upload Files</button>
+            <button id="fab-new-folder" class="fab-item"><i class="fa-solid fa-folder-plus"></i> New Folder</button>
+            <button id="fab-new-file" class="fab-item"><i class="fa-solid fa-file-circle-plus"></i> New File</button>
+            <button id="fab-compress" class="fab-item"><i class="fa-solid fa-file-zipper"></i> Compress to ZIP</button>
+        </div>
+    </div>
+
+    <!-- FLOATING UPLOAD PROGRESS CARD -->
+    <div id="upload-toast" class="upload-toast hidden">
+        <div class="toast-header">
+            <div class="toast-title">
+                <i class="fa-solid fa-cloud-arrow-up"></i>
+                <span id="upload-status-title">Uploading files...</span>
+            </div>
+            <span id="upload-total-pct" class="toast-pct">0%</span>
+            <button id="toast-close" class="toast-minimize"><i class="fa-solid fa-chevron-down"></i></button>
+        </div>
+        <div class="toast-body">
+            <div class="toast-overall-bar">
+                <div id="toast-bar-fill" class="toast-bar-fill" style="width: 0%;"></div>
+            </div>
+            <div id="toast-file-list" class="toast-file-list"></div>
+        </div>
+    </div>
+
+    <!-- MODAL: LIVE REMOTE PC DESKTOP CONTROL -->
+    <div id="remote-pc-modal" class="modal-overlay hidden">
+        <div class="modal-card remote-pc-card">
+            <div class="modal-header remote-pc-header">
+                <h3><i class="fa-solid fa-desktop text-danger"></i> Live PC Remote Control</h3>
+                <div class="remote-header-actions">
+                    <button id="btn-toggle-fullscreen" class="icon-btn-round" title="Toggle Fullscreen Mode"><i class="fa-solid fa-expand"></i></button>
+                    <span id="remote-fps-tag" class="badge-count">Ultra-Fast Live</span>
+                    <button class="close-modal"><i class="fa-solid fa-xmark"></i></button>
+                </div>
+            </div>
+            <div class="modal-body remote-pc-body">
+                <div class="remote-screen-wrapper">
+                    <img id="remote-screen-img" src="" alt="Live Desktop Screen">
+                </div>
+
+                <div class="remote-toolbar">
+                    <div class="remote-key-buttons">
+                        <button class="btn btn-sm btn-secondary remote-key-btn" data-shortcut="win+d">Win+D</button>
+                        <button class="btn btn-sm btn-secondary remote-key-btn" data-shortcut="alt+tab">Alt+Tab</button>
+                        <button class="btn btn-sm btn-secondary remote-key-btn" data-shortcut="win+e">Win+E</button>
+                        <button class="btn btn-sm btn-secondary remote-key-btn" data-shortcut="win+r">Win+R</button>
+                        <button class="btn btn-sm btn-secondary remote-key-btn" data-shortcut="ctrl+c">Ctrl+C</button>
+                        <button class="btn btn-sm btn-secondary remote-key-btn" data-shortcut="ctrl+v">Ctrl+V</button>
+                        <button class="btn btn-sm btn-secondary remote-key-btn" data-key="esc">Esc</button>
+                        <button class="btn btn-sm btn-secondary remote-key-btn" data-key="enter">Enter</button>
+                    </div>
+
+                    <form id="remote-type-form" class="remote-type-row">
+                        <input type="text" id="remote-type-input" placeholder="Type text to send to host PC..." autocomplete="off">
+                        <button type="submit" class="btn btn-sm btn-primary">Send Text</button>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- MODAL: SYSTEM DASHBOARD & POWER CONTROLS -->
+    <div id="sys-modal" class="modal-overlay hidden">
+        <div class="modal-card">
+            <div class="modal-header">
+                <h3><i class="fa-solid fa-gauge-high"></i> System Dashboard</h3>
+                <button class="close-modal"><i class="fa-solid fa-xmark"></i></button>
+            </div>
+            <div class="modal-body">
+                <div class="sys-metrics-grid">
+                    <div class="metric-card">
+                        <div class="metric-title"><i class="fa-solid fa-microchip"></i> CPU Usage</div>
+                        <div id="sys-cpu-val" class="metric-value">0%</div>
+                        <div class="metric-bar"><div id="sys-cpu-bar" class="metric-fill" style="width:0%"></div></div>
+                    </div>
+                    <div class="metric-card">
+                        <div class="metric-title"><i class="fa-solid fa-memory"></i> RAM Memory</div>
+                        <div id="sys-mem-val" class="metric-value">0 / 0 GB</div>
+                        <div class="metric-bar"><div id="sys-mem-bar" class="metric-fill" style="width:0%"></div></div>
+                    </div>
+                    <div class="metric-card">
+                        <div class="metric-title"><i class="fa-solid fa-clock"></i> System Uptime</div>
+                        <div id="sys-uptime-val" class="metric-value">0h 0m</div>
+                        <div class="metric-sub" id="sys-host-val">Host: PC</div>
+                    </div>
+                </div>
+
+                <div class="power-controls-section">
+                    <div class="power-title"><i class="fa-solid fa-power-off"></i> Remote Host Power Controls</div>
+                    <div class="power-buttons-grid">
+                        <button class="power-btn btn-lock" data-action="lock"><i class="fa-solid fa-lock"></i> Lock PC</button>
+                        <button class="power-btn btn-sleep" data-action="sleep"><i class="fa-solid fa-moon"></i> Sleep</button>
+                        <button class="power-btn btn-restart" data-action="restart"><i class="fa-solid fa-rotate-right"></i> Restart</button>
+                        <button class="power-btn btn-shutdown" data-action="shutdown"><i class="fa-solid fa-power-off"></i> Shutdown</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- MODAL: WEB TERMINAL -->
+    <div id="terminal-modal" class="modal-overlay hidden">
+        <div class="modal-card lg-card terminal-card">
+            <div class="modal-header terminal-header">
+                <h3><i class="fa-solid fa-terminal"></i> PowerShell / Web Terminal</h3>
+                <button class="close-modal"><i class="fa-solid fa-xmark"></i></button>
+            </div>
+            <div class="modal-body terminal-body">
+                <div id="terminal-output" class="terminal-output-box">
+                    <div class="term-line info">MyWalt PowerShell Remote Terminal Console v2.0</div>
+                    <div class="term-line info">Type any PowerShell or CMD command below.</div>
+                </div>
+                <form id="terminal-form" class="terminal-input-row">
+                    <span class="term-prompt">PS &gt;</span>
+                    <input type="text" id="terminal-input" placeholder="Type command e.g. dir, ipconfig, python --version..." autocomplete="off">
+                    <button type="submit" class="btn btn-sm btn-primary">Run</button>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- MODAL: STORAGE SPACE ANALYZER -->
+    <div id="storage-modal" class="modal-overlay hidden">
+        <div class="modal-card">
+            <div class="modal-header">
+                <h3><i class="fa-solid fa-chart-pie"></i> Folder Storage Breakdown</h3>
+                <button class="close-modal"><i class="fa-solid fa-xmark"></i></button>
+            </div>
+            <div class="modal-body">
+                <div id="storage-analyzer-content" class="storage-analyzer-body">
+                    <p class="text-muted">Analyzing directory size...</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- MODAL: IMAGE LIGHTBOX GALLERY -->
+    <div id="lightbox-modal" class="modal-overlay lightbox-overlay hidden">
+        <button id="lightbox-close" class="lightbox-close-btn"><i class="fa-solid fa-xmark"></i></button>
+        <button id="lightbox-prev" class="lightbox-nav-btn prev"><i class="fa-solid fa-chevron-left"></i></button>
+        <button id="lightbox-next" class="lightbox-nav-btn next"><i class="fa-solid fa-chevron-right"></i></button>
+        <div class="lightbox-content">
+            <img id="lightbox-img" src="" alt="Image Preview">
+            <div id="lightbox-caption" class="lightbox-caption">Image.jpg</div>
+        </div>
+    </div>
+
+    <!-- MODAL: MEDIA PLAYER (Video / Audio / PDF) -->
+    <div id="preview-modal" class="modal-overlay hidden">
+        <div class="modal-card preview-card">
+            <div class="modal-header">
+                <h3 id="preview-title">Media Preview</h3>
+                <button class="close-modal"><i class="fa-solid fa-xmark"></i></button>
+            </div>
+            <div id="preview-container" class="preview-body">
+                <!-- Injected video, audio, or PDF iframe -->
+            </div>
+        </div>
+    </div>
+
+    <!-- MODAL: COMPRESS TO ZIP -->
+    <div id="compress-modal" class="modal-overlay hidden">
+        <div class="modal-card sm-card">
+            <div class="modal-header">
+                <h3><i class="fa-solid fa-file-zipper"></i> Compress Selection to ZIP</h3>
+                <button class="close-modal"><i class="fa-solid fa-xmark"></i></button>
+            </div>
+            <div class="modal-body">
+                <div class="input-group">
+                    <label for="compress-name">Archive Name</label>
+                    <input type="text" id="compress-name" placeholder="archive.zip" value="archive.zip">
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary close-modal">Cancel</button>
+                <button id="btn-confirm-compress" class="btn btn-primary">Compress</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- MODAL: UPLOAD FILE -->
+    <div id="upload-modal" class="modal-overlay hidden">
+        <div class="modal-card">
+            <div class="modal-header">
+                <h3><i class="fa-solid fa-cloud-arrow-up"></i> Upload Files</h3>
+                <button class="close-modal"><i class="fa-solid fa-xmark"></i></button>
+            </div>
+            <div class="modal-body">
+                <div id="drop-zone" class="drop-zone">
+                    <i class="fa-solid fa-cloud-arrow-up drop-icon"></i>
+                    <p>Drag & Drop files here, or <span>browse files</span></p>
+                    <input type="file" id="upload-file-input" multiple class="hidden-input">
+                </div>
+                <div id="upload-file-list" class="file-queue"></div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary close-modal">Cancel</button>
+                <button id="btn-start-upload" class="btn btn-primary"><i class="fa-solid fa-upload"></i> Start Upload</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- MODAL: NEW ITEM -->
+    <div id="new-item-modal" class="modal-overlay hidden">
+        <div class="modal-card sm-card">
+            <div class="modal-header">
+                <h3 id="new-item-title">Create New Item</h3>
+                <button class="close-modal"><i class="fa-solid fa-xmark"></i></button>
+            </div>
+            <div class="modal-body">
+                <div class="input-group">
+                    <label for="new-item-name">Name</label>
+                    <input type="text" id="new-item-name" placeholder="Enter name..." autofocus>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary close-modal">Cancel</button>
+                <button id="btn-confirm-create" class="btn btn-primary">Create</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- MODAL: RENAME ITEM -->
+    <div id="rename-modal" class="modal-overlay hidden">
+        <div class="modal-card sm-card">
+            <div class="modal-header">
+                <h3>Rename Item</h3>
+                <button class="close-modal"><i class="fa-solid fa-xmark"></i></button>
+            </div>
+            <div class="modal-body">
+                <div class="input-group">
+                    <label for="rename-input">New Name</label>
+                    <input type="text" id="rename-input" placeholder="Enter new name...">
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary close-modal">Cancel</button>
+                <button id="btn-confirm-rename" class="btn btn-primary">Save Rename</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- MODAL: TEXT / CODE EDITOR -->
+    <div id="editor-modal" class="modal-overlay hidden">
+        <div class="modal-card lg-card">
+            <div class="modal-header">
+                <h3 id="editor-title"><i class="fa-solid fa-code"></i> Text Editor</h3>
+                <div class="header-actions">
+                    <button id="btn-save-file" class="btn btn-success"><i class="fa-solid fa-floppy-disk"></i> Save</button>
+                    <button class="close-modal"><i class="fa-solid fa-xmark"></i></button>
+                </div>
+            </div>
+            <div class="modal-body editor-body">
+                <textarea id="file-editor-text" class="code-textarea" spellcheck="false"></textarea>
+            </div>
+        </div>
+    </div>
+
+    <!-- MODAL: SETTINGS -->
+    <div id="settings-modal" class="modal-overlay hidden">
+        <div class="modal-card sm-card">
+            <div class="modal-header">
+                <h3><i class="fa-solid fa-shield-halved"></i> Security Settings</h3>
+                <button class="close-modal"><i class="fa-solid fa-xmark"></i></button>
+            </div>
+            <div class="modal-body">
+                <form id="settings-form">
+                    <div class="input-group">
+                        <label for="settings-old-pass">Current Password</label>
+                        <input type="password" id="settings-old-pass" placeholder="Current password">
+                    </div>
+                    <div class="input-group">
+                        <label for="settings-new-pass">New Password</label>
+                        <input type="password" id="settings-new-pass" required placeholder="New password">
+                    </div>
+                    <div id="settings-msg" class="message-banner hidden"></div>
+                    <button type="submit" class="btn btn-primary btn-block">Update Password</button>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <script src="/static/app.js"></script>
+</body>
+</html>

@@ -1,0 +1,39 @@
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+env/
+venv/
+ENV/
+.venv
+
+# C++ Build Outputs & Executables
+*.exe
+*.obj
+*.o
+*.dll
+*.so
+*.dylib
+native/*.exe
+
+# Secret / Credentials & User Runtime Data
+backend/.secret_key
+backend/.password_hash
+backend/.favorites.json
+cloudflared.exe
+
+# Environment Files
+.env
+.env.local
+
+# IDE & Editor Settings
+.vscode/
+.idea/
+*.swp
+*~
+.DS_Store
+
+# Logs
+*.log
