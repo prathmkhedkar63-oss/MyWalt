@@ -127,6 +127,12 @@
                         <i class="fa-solid fa-moon"></i>
                     </button>
 
+                    <!-- WRITE-PROTECTION / FILE ACCESS LOCK BADGE -->
+                    <button id="btn-write-access-toggle" class="write-access-pill locked" title="File Protection: Click to unlock or lock file modifications">
+                        <i id="write-access-icon" class="fa-solid fa-lock"></i>
+                        <span id="write-access-label">Read-Only</span>
+                    </button>
+
                     <div class="user-badge" title="Master Admin Session">
                         <div class="avatar"><i class="fa-solid fa-user-shield"></i></div>
                         <div class="user-info">
@@ -515,6 +521,31 @@
                     </div>
                     <div id="settings-msg" class="message-banner hidden"></div>
                     <button type="submit" class="btn btn-primary btn-block">Update Password</button>
+                </form>
+            </div>
+    <!-- MODAL: WRITE ACCESS / FILE MODIFICATION AUTHORIZATION -->
+    <div id="write-auth-modal" class="modal-overlay hidden">
+        <div class="modal-card sm-card">
+            <div class="modal-header">
+                <h3><i class="fa-solid fa-shield-halved text-warning"></i> File Modification Access</h3>
+                <button class="close-modal"><i class="fa-solid fa-xmark"></i></button>
+            </div>
+            <div class="modal-body">
+                <p style="margin-bottom: 14px; color: var(--text-muted); font-size: 0.85rem; line-height: 1.45;">
+                    Host PC write-protection is active. Enter your Master Password to authorize creating, editing, renaming, uploading, or deleting files.
+                </p>
+                <form id="write-auth-form">
+                    <div class="input-group">
+                        <label for="write-auth-password">Master Password</label>
+                        <input type="password" id="write-auth-password" placeholder="Enter master password..." required autofocus>
+                    </div>
+                    <div id="write-auth-error" class="error-banner hidden" style="margin-bottom: 12px;"></div>
+                    <div class="modal-footer" style="padding: 0; border: none; margin-top: 15px;">
+                        <button type="button" class="btn btn-secondary close-modal">Cancel</button>
+                        <button type="submit" id="btn-confirm-write-auth" class="btn btn-primary">
+                            <i class="fa-solid fa-lock-open"></i> Authorize Changes
+                        </button>
+                    </div>
                 </form>
             </div>
         </div>

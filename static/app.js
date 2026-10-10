@@ -18,12 +18,17 @@ const state = {
     sysStatsInterval: null,
     remotePcLooping: false,
     clipboard: { action: null, sources: [] },
-    activeHoverPath: null
+    activeHoverPath: null,
+    hasWriteAccess: false
 };
 
-// Helper token getter
+// Helper token getters
 function getToken() {
     return localStorage.getItem('mywalt_token') || '';
+}
+
+function getWriteToken() {
+    return localStorage.getItem('mywalt_write_token') || '';
 }
 
 // DOM Elements
@@ -32,6 +37,15 @@ const el = {
     loginForm: document.getElementById('login-form'),
     loginPassword: document.getElementById('login-password'),
     loginError: document.getElementById('login-error'),
+    
+    btnWriteAccessToggle: document.getElementById('btn-write-access-toggle'),
+    writeAccessIcon: document.getElementById('write-access-icon'),
+    writeAccessLabel: document.getElementById('write-access-label'),
+    writeAuthModal: document.getElementById('write-auth-modal'),
+    writeAuthForm: document.getElementById('write-auth-form'),
+    writeAuthPassword: document.getElementById('write-auth-password'),
+    writeAuthError: document.getElementById('write-auth-error'),
+    btnConfirmWriteAuth: document.getElementById('btn-confirm-write-auth'),
     
     app: document.getElementById('app'),
     searchInput: document.getElementById('search-input'),
@@ -163,6 +177,44 @@ const el = {
 
 let newItemIsDirectory = false;
 
+// Write Access Management
+let writeAuthCallbacks = [];
+
+function setWriteToken(tok) {
+    if (tok) {
+        localStorage.setItem('mywalt_write_token', tok);
+        state.hasWriteAccess = true;
+    } else {
+        localStorage.removeItem('mywalt_write_token');
+        state.hasWriteAccess = false;
+    }
+    updateWriteAccessUI();
+}
+
+function updateWriteAccessUI() {
+    if (!el.btnWriteAccessToggle) return;
+    if (state.hasWriteAccess) {
+        el.btnWriteAccessToggle.className = 'write-access-pill unlocked';
+        el.btnWriteAccessToggle.title = 'Write Access Active: PC file modifications enabled. Click to lock.';
+        if (el.writeAccessIcon) el.writeAccessIcon.className = 'fa-solid fa-lock-open';
+        if (el.writeAccessLabel) el.writeAccessLabel.textContent = 'Write Access';
+    } else {
+        el.btnWriteAccessToggle.className = 'write-access-pill locked';
+        el.btnWriteAccessToggle.title = 'Protected (Read-Only): Modifications disabled. Click to authorize changes.';
+        if (el.writeAccessIcon) el.writeAccessIcon.className = 'fa-solid fa-lock';
+        if (el.writeAccessLabel) el.writeAccessLabel.textContent = 'Read-Only';
+    }
+}
+
+function promptWriteAuthorization(options = {}) {
+    writeAuthCallbacks.push(options);
+    if (!el.writeAuthModal) return;
+    el.writeAuthPassword.value = '';
+    el.writeAuthError.classList.add('hidden');
+    openModal(el.writeAuthModal);
+    setTimeout(() => el.writeAuthPassword && el.writeAuthPassword.focus(), 80);
+}
+
 // API Helper
 async function api(endpoint, options = {}) {
     options.headers = options.headers || {};
@@ -170,11 +222,43 @@ async function api(endpoint, options = {}) {
     if (token) {
         options.headers['Authorization'] = `Bearer ${token}`;
     }
+    const writeToken = getWriteToken();
+    if (writeToken) {
+        options.headers['X-Write-Token'] = writeToken;
+    }
     try {
         const response = await fetch(endpoint, options);
         if (response.status === 401) {
             showLogin();
             throw new Error('Authentication required');
+        }
+        if (response.status === 403) {
+            const data = await response.json().catch(() => ({}));
+            const detailStr = typeof data.detail === 'string' ? data.detail : JSON.stringify(data);
+            if (detailStr.includes('WRITE_ACCESS_REQUIRED')) {
+                // Intercept and prompt write authorization modal
+                return new Promise((resolve, reject) => {
+                    promptWriteAuthorization({
+                        onSuccess: async () => {
+                            try {
+                                options.headers['X-Write-Token'] = getWriteToken();
+                                const retryRes = await fetch(endpoint, options);
+                                if (!retryRes.ok) {
+                                    const retryData = await retryRes.json().catch(() => ({}));
+                                    throw new Error(retryData.detail || 'API Request Failed');
+                                }
+                                resolve(await retryRes.json());
+                            } catch (retryErr) {
+                                reject(retryErr);
+                            }
+                        },
+                        onCancel: () => {
+                            reject(new Error('Operation cancelled: Write permission not granted'));
+                        }
+                    });
+                });
+            }
+            throw new Error(detailStr || 'Access forbidden');
         }
         const data = await response.json();
         if (!response.ok) {
@@ -197,6 +281,14 @@ async function checkStatus() {
         const res = await api('/api/status');
         if (res.is_authenticated) {
             hideLogin();
+            state.hasWriteAccess = !!res.has_write_access;
+            if (getWriteToken() && !state.hasWriteAccess) {
+                try {
+                    const wStatus = await api('/api/auth/write-access/status');
+                    state.hasWriteAccess = !!wStatus.has_write_access;
+                } catch (e) {}
+            }
+            updateWriteAccessUI();
             loadDrives();
             loadFavorites();
             loadDirectory('');
@@ -245,10 +337,65 @@ function setupEventListeners() {
         }
     });
 
+    // Write Access Toggle Badge Click
+    if (el.btnWriteAccessToggle) {
+        el.btnWriteAccessToggle.addEventListener('click', async () => {
+            if (state.hasWriteAccess) {
+                if (confirm('Lock file modifications? System will return to Read-Only mode.')) {
+                    try {
+                        await fetch('/api/auth/write-access/revoke', {
+                            method: 'POST',
+                            headers: { 'Authorization': `Bearer ${getToken()}` }
+                        });
+                    } catch (e) {}
+                    setWriteToken(null);
+                }
+            } else {
+                promptWriteAuthorization();
+            }
+        });
+    }
+
+    // Write Authorization Form Submit
+    if (el.writeAuthForm) {
+        el.writeAuthForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const password = el.writeAuthPassword.value;
+            try {
+                const res = await fetch('/api/auth/write-access', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${getToken()}`
+                    },
+                    body: JSON.stringify({ password })
+                });
+                const data = await res.json();
+                if (!res.ok) {
+                    throw new Error(data.detail || 'Incorrect password');
+                }
+                setWriteToken(data.write_token);
+                closeModal(el.writeAuthModal);
+
+                // Run any queued operations
+                const callbacks = writeAuthCallbacks.slice();
+                writeAuthCallbacks = [];
+                for (const cb of callbacks) {
+                    if (cb.onSuccess) cb.onSuccess();
+                }
+            } catch (err) {
+                el.writeAuthError.textContent = err.message;
+                el.writeAuthError.classList.remove('hidden');
+            }
+        });
+    }
+
     // Logout
     el.btnLogout.addEventListener('click', async () => {
         try { await api('/api/logout', { method: 'POST' }); } catch (e) {}
         localStorage.removeItem('mywalt_token');
+        localStorage.removeItem('mywalt_write_token');
+        state.hasWriteAccess = false;
         showLogin();
     });
 

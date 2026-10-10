@@ -901,5 +901,43 @@ body.dark-theme .card-action-btn { background: rgba(30, 41, 59, 0.9); color: whi
 .remote-type-row { display: flex; gap: 8px; }
 .remote-type-row input { flex: 1; background: var(--bg-hover); border: 1px solid var(--border-color); padding: 6px 12px; border-radius: var(--radius-sm); color: var(--text-main); font-size: 0.85rem; outline: none; }
 
+/* Write-Access / Read-Only Protection Badge & Pill */
+.write-access-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    padding: 6px 14px;
+    border-radius: 20px;
+    font-size: 0.8rem;
+    font-weight: 600;
+    cursor: pointer;
+    border: 1px solid transparent;
+    transition: var(--transition-smooth);
+    user-select: none;
+}
+.write-access-pill.locked {
+    background: rgba(239, 68, 68, 0.14);
+    color: #f87171;
+    border-color: rgba(239, 68, 68, 0.32);
+}
+.write-access-pill.locked:hover {
+    background: rgba(239, 68, 68, 0.24);
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px rgba(239, 68, 68, 0.25);
+}
+.write-access-pill.unlocked {
+    background: rgba(16, 185, 129, 0.14);
+    color: #34d399;
+    border-color: rgba(16, 185, 129, 0.32);
+}
+.write-access-pill.unlocked:hover {
+    background: rgba(16, 185, 129, 0.24);
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px rgba(16, 185, 129, 0.25);
+}
+.write-access-pill i {
+    font-size: 0.85rem;
+}
+
 
 
