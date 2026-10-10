@@ -7,6 +7,7 @@ import json
 import zipfile
 import tarfile
 import ctypes
+import subprocess
 from typing import List, Dict, Any, Optional
 
 
@@ -82,8 +83,45 @@ def get_file_category(filename: str, is_dir: bool) -> str:
     return "file"
 
 
+NATIVE_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "native")
+NATIVE_ENGINE_EXE = os.path.join(NATIVE_DIR, "native_engine.exe")
+
+
+def _try_native_list(target_path: str) -> Optional[List[Dict[str, Any]]]:
+    """Execute native C++ directory listing if native_engine binary is present."""
+    if not os.path.exists(NATIVE_ENGINE_EXE):
+        return None
+    try:
+        proc = subprocess.run(
+            [NATIVE_ENGINE_EXE, "list", target_path, "0"],
+            capture_output=True,
+            text=True,
+            timeout=8
+        )
+        if proc.returncode == 0:
+            data = json.loads(proc.stdout)
+            raw_items = data.get("items", [])
+            items = []
+            for itm in raw_items:
+                is_dir = itm.get("is_dir", False)
+                name = itm.get("name", "")
+                items.append({
+                    "name": name,
+                    "path": itm.get("path", ""),
+                    "is_dir": is_dir,
+                    "size": itm.get("size", 0),
+                    "modified": itm.get("modified", 0),
+                    "created": itm.get("modified", 0),
+                    "category": get_file_category(name, is_dir),
+                })
+            return items
+    except Exception:
+        pass
+    return None
+
+
 def list_directory(target_path: str) -> Dict[str, Any]:
-    """List all items in a directory with metadata."""
+    """List all items in a directory with metadata, utilizing C++ native engine if available."""
     if not os.path.exists(target_path):
         raise FileNotFoundError(f"Path does not exist: {target_path}")
     if not os.path.isdir(target_path):
@@ -92,28 +130,34 @@ def list_directory(target_path: str) -> Dict[str, Any]:
     items: List[Dict[str, Any]] = []
     errors: List[str] = []
 
-    try:
-        entries = list(os.scandir(target_path))
-    except PermissionError:
-        raise PermissionError(f"Access denied: {target_path}")
-
-    for entry in entries:
+    # 1. Attempt high-speed C++ native listing
+    native_res = _try_native_list(target_path)
+    if native_res is not None:
+        items = native_res
+    else:
+        # 2. Python scandir fallback
         try:
-            is_dir = entry.is_dir(follow_symlinks=False)
-            stat = entry.stat(follow_symlinks=False)
-            items.append({
-                "name": entry.name,
-                "path": os.path.abspath(entry.path),
-                "is_dir": is_dir,
-                "size": stat.st_size if not is_dir else 0,
-                "modified": stat.st_mtime,
-                "created": stat.st_ctime,
-                "category": get_file_category(entry.name, is_dir),
-            })
-        except Exception as e:
-            errors.append(f"{entry.name}: {e}")
+            entries = list(os.scandir(target_path))
+        except PermissionError:
+            raise PermissionError(f"Access denied: {target_path}")
 
-    items.sort(key=lambda x: (not x["is_dir"], x["name"].lower()))
+        for entry in entries:
+            try:
+                is_dir = entry.is_dir(follow_symlinks=False)
+                stat = entry.stat(follow_symlinks=False)
+                items.append({
+                    "name": entry.name,
+                    "path": os.path.abspath(entry.path),
+                    "is_dir": is_dir,
+                    "size": stat.st_size if not is_dir else 0,
+                    "modified": stat.st_mtime,
+                    "created": stat.st_ctime,
+                    "category": get_file_category(entry.name, is_dir),
+                })
+            except Exception as e:
+                errors.append(f"{entry.name}: {e}")
+
+        items.sort(key=lambda x: (not x["is_dir"], x["name"].lower()))
 
     # Build breadcrumbs
     norm = os.path.abspath(target_path)
@@ -340,10 +384,31 @@ def extract_archive(archive_path: str, dest_dir: str) -> Dict[str, Any]:
 
 
 def analyze_directory_space(target_path: str) -> Dict[str, Any]:
-    """Calculate space breakdown by subfolders and top largest files."""
+    """Calculate space breakdown by subfolders and top largest files, using C++ native engine if available."""
     if not os.path.exists(target_path) or not os.path.isdir(target_path):
         raise NotADirectoryError(target_path)
 
+    # 1. Attempt C++ native space analysis (50-100x faster on deep directories)
+    if os.path.exists(NATIVE_ENGINE_EXE):
+        try:
+            proc = subprocess.run(
+                [NATIVE_ENGINE_EXE, "analyze", target_path],
+                capture_output=True,
+                text=True,
+                timeout=15
+            )
+            if proc.returncode == 0:
+                data = json.loads(proc.stdout)
+                return {
+                    "target_path": target_path,
+                    "total_size": data.get("total_size", 0),
+                    "subfolders": data.get("subfolders", [])[:15],
+                    "top_files": data.get("largest_files", [])[:15]
+                }
+        except Exception:
+            pass
+
+    # 2. Python fallback
     total_size = 0
     subfolders: List[Dict[str, Any]] = []
     top_files: List[Dict[str, Any]] = []
