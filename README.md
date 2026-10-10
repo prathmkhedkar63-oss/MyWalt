@@ -7,7 +7,8 @@
 ## ✨ Features
 
 - 📁 **Complete File Explorer**: Browse drives, search, copy, move, rename, upload, download, and delete files directly in your web browser.
-- ⚡ **High-Speed C++ Engine**: Includes a native C++ fast search executable (`fast_search.cpp`) for instant filename and full-text code searching across millions of files.
+- ⚡ **High-Speed C++ Native Engine**: Includes a high-performance native C++ engine (`native/native_engine.cpp`) and fast search engine (`native/fast_search.cpp`) for instant directory scanning, recursive disk space analysis, batch deletions, and multithreaded searches across millions of files.
+- 🔐 **File Modification Write-Protection Gate**: Protects host PC files from unauthorized or accidental changes with an active Write-Access Gate. File modifications (saving, deleting, creating, renaming, uploading, compressing) require explicit Master Password verification and authorization, featuring an interactive Authorization Modal and navbar status lock badge (🔒 Read-Only / 🔓 Write Access).
 - 🎬 **Media Streaming & PDF Viewer**: Stream high-definition videos (`.mp4`, `.webm`, `.mkv`) with seeking support, listen to audio files, and view PDFs directly in the browser.
 - 📝 **In-Browser Text Editor**: Read and edit code (`.py`, `.js`, `.json`, `.cpp`, `.md`, etc.) and text files with syntax support.
 - 📊 **Storage Analyzer**: Visual breakdown of disk space consumption by subfolder and top largest files.
@@ -23,16 +24,19 @@
 ```
 MyWalt/
 ├── backend/
-│   ├── security.py       # JWT auth, PBKDF2 hashing, path sanitization & rate limiter
-│   ├── file_ops.py       # Directory listing, file transfers, archives, storage analyzer
+│   ├── security.py       # JWT auth, Write Access tokens, PBKDF2 hashing & rate limiter
+│   ├── file_ops.py       # Directory listing, file transfers, archives & C++ engine bridge
 │   └── system.py         # System metrics, power controls, terminal & remote desktop
 ├── native/
-│   └── fast_search.cpp   # Native C++ search engine (auto-compiles on startup)
+│   ├── native_engine.cpp # Unified C++ native engine (list, analyze, search, batch ops)
+│   ├── fast_search.cpp   # Native C++ search engine
+│   ├── build.bat         # Automated build script for MSVC, GCC, and Clang
+│   └── CMakeLists.txt    # CMake configuration for native engine binaries
 ├── static/
-│   ├── index.html        # Modern responsive Web UI
-│   ├── app.js            # Interactive frontend logic & API client
-│   └── style.css         # Modern glassmorphism & dark-mode styling
-├── main.py               # FastAPI application backend server & endpoints
+│   ├── index.html        # Modern responsive Web UI with Write Access Modal & lock badge
+│   ├── app.js            # Frontend logic, API client & Write Access interceptor
+│   └── style.css         # Modern glassmorphism, dark-mode & security badge styling
+├── main.py               # FastAPI application backend server & protected endpoints
 ├── run_server.py         # Server launcher with auto-tunneling and C++ compiler
 ├── REMOTE_ACCESS_GUIDE.md# Instructions for setting up free remote access
 ├── requirements.txt      # Python dependencies
