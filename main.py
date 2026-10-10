@@ -6,7 +6,7 @@ import mimetypes
 import io
 import zipfile
 from typing import List, Optional, Dict, Any
-from fastapi import FastAPI, Request, Response, HTTPException, Depends, Cookie, UploadFile, File, Form, Query
+from fastapi import FastAPI, Request, Response, HTTPException, Depends, Cookie, UploadFile, File, Form, Query, Header
 from fastapi.responses import HTMLResponse, FileResponse, StreamingResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
@@ -18,6 +18,8 @@ from backend.security import (
     has_master_password,
     create_token,
     verify_token,
+    create_write_token,
+    verify_write_token,
     sanitize_path,
     is_ip_locked,
     record_failed_attempt,
@@ -96,7 +98,25 @@ async def get_current_user(request: Request, session_token: Optional[str] = Cook
     return payload
 
 
+# Write Access dependency for File Modification operations
+async def require_write_access(
+    request: Request,
+    write_token: Optional[str] = Cookie(None),
+    x_write_token: Optional[str] = Header(None)
+):
+    token = x_write_token or write_token or request.headers.get("X-Write-Token") or request.query_params.get("write_token")
+    if not verify_write_token(token):
+        raise HTTPException(
+            status_code=403,
+            detail="WRITE_ACCESS_REQUIRED: Master Password verification required to modify files."
+        )
+    return True
+
+
 # Pydantic Schemas
+class WriteAccessRequest(BaseModel):
+    password: str
+
 class LoginRequest(BaseModel):
     password: str
 
@@ -185,14 +205,63 @@ async def logout(response: Response):
     return {"success": True}
 
 @app.get("/api/status")
-async def status(request: Request, session_token: Optional[str] = Cookie(None)):
+async def status(
+    request: Request,
+    session_token: Optional[str] = Cookie(None),
+    write_token: Optional[str] = Cookie(None),
+    x_write_token: Optional[str] = Header(None)
+):
     token = session_token or (request.headers.get("Authorization") or "").replace("Bearer ", "")
     is_authenticated = verify_token(token) is not None
+    w_token = x_write_token or write_token or request.headers.get("X-Write-Token")
+    has_write = verify_write_token(w_token)
     return {
         "status": "online",
         "has_master_password": has_master_password(),
-        "is_authenticated": is_authenticated
+        "is_authenticated": is_authenticated,
+        "has_write_access": has_write
     }
+
+# --- WRITE ACCESS AUTHORIZATION ENDPOINTS ---
+@app.post("/api/auth/write-access")
+async def authorize_write_access(
+    req: WriteAccessRequest,
+    response: Response,
+    user=Depends(get_current_user)
+):
+    """Verify Master Password and issue a Write Access token for modifying files."""
+    if not verify_master_password(req.password):
+        raise HTTPException(status_code=401, detail="Incorrect master password")
+    
+    token = create_write_token(expires_in_seconds=3600)
+    response.set_cookie(
+        key="write_token",
+        value=token,
+        max_age=3600,
+        httponly=False,
+        samesite="lax"
+    )
+    return {"success": True, "write_token": token, "expires_in": 3600}
+
+@app.get("/api/auth/write-access/status")
+async def get_write_access_status(
+    request: Request,
+    write_token: Optional[str] = Cookie(None),
+    x_write_token: Optional[str] = Header(None),
+    user=Depends(get_current_user)
+):
+    """Check whether current session has active file modification privileges."""
+    token = x_write_token or write_token or request.headers.get("X-Write-Token") or request.query_params.get("write_token")
+    return {"has_write_access": verify_write_token(token)}
+
+@app.post("/api/auth/write-access/revoke")
+async def revoke_write_access(
+    response: Response,
+    user=Depends(get_current_user)
+):
+    """Lock write access / switch session to Read-Only mode."""
+    response.delete_cookie(key="write_token")
+    return {"success": True, "message": "Write access locked (Read-Only mode)"}
 
 @app.post("/api/set-password")
 async def update_password(req: PasswordChangeRequest, user=Depends(get_current_user)):
@@ -296,7 +365,8 @@ async def render_pdf(path: str = Query(...), user=Depends(get_current_user)):
 async def upload_files(
     target_dir: str = Form(...),
     files: List[UploadFile] = File(...),
-    user=Depends(get_current_user)
+    user=Depends(get_current_user),
+    _=Depends(require_write_access)
 ):
     safe_dir = sanitize_path(target_dir)
     if not safe_dir or not os.path.isdir(safe_dir):
@@ -316,7 +386,11 @@ async def upload_files(
     return {"uploaded": uploaded, "errors": errors}
 
 @app.post("/api/create")
-async def create_new_item(req: CreateItemRequest, user=Depends(get_current_user)):
+async def create_new_item(
+    req: CreateItemRequest,
+    user=Depends(get_current_user),
+    _=Depends(require_write_access)
+):
     safe_dir = sanitize_path(req.target_dir)
     if not safe_dir:
         raise HTTPException(status_code=403, detail="Invalid path")
@@ -327,7 +401,11 @@ async def create_new_item(req: CreateItemRequest, user=Depends(get_current_user)
         raise HTTPException(status_code=400, detail=str(e))
 
 @app.post("/api/rename")
-async def rename(req: RenameRequest, user=Depends(get_current_user)):
+async def rename(
+    req: RenameRequest,
+    user=Depends(get_current_user),
+    _=Depends(require_write_access)
+):
     safe_p = sanitize_path(req.path)
     if not safe_p:
         raise HTTPException(status_code=403, detail="Invalid path")
@@ -338,7 +416,11 @@ async def rename(req: RenameRequest, user=Depends(get_current_user)):
         raise HTTPException(status_code=400, detail=str(e))
 
 @app.post("/api/delete")
-async def delete(req: DeleteRequest, user=Depends(get_current_user)):
+async def delete(
+    req: DeleteRequest,
+    user=Depends(get_current_user),
+    _=Depends(require_write_access)
+):
     sanitized_paths = []
     for p in req.paths:
         sp = sanitize_path(p)
@@ -348,7 +430,11 @@ async def delete(req: DeleteRequest, user=Depends(get_current_user)):
     return res
 
 @app.post("/api/copy")
-async def copy(req: TransferRequest, user=Depends(get_current_user)):
+async def copy(
+    req: TransferRequest,
+    user=Depends(get_current_user),
+    _=Depends(require_write_access)
+):
     safe_dest = sanitize_path(req.dest_dir)
     if not safe_dest:
         raise HTTPException(status_code=403, detail="Invalid destination path")
@@ -356,7 +442,11 @@ async def copy(req: TransferRequest, user=Depends(get_current_user)):
     return copy_items(sources, safe_dest)
 
 @app.post("/api/move")
-async def move(req: TransferRequest, user=Depends(get_current_user)):
+async def move(
+    req: TransferRequest,
+    user=Depends(get_current_user),
+    _=Depends(require_write_access)
+):
     safe_dest = sanitize_path(req.dest_dir)
     if not safe_dest:
         raise HTTPException(status_code=403, detail="Invalid destination path")
@@ -375,7 +465,11 @@ async def read_file(path: str = Query(...), user=Depends(get_current_user)):
         raise HTTPException(status_code=400, detail=str(e))
 
 @app.post("/api/save")
-async def save_file(req: SaveFileRequest, user=Depends(get_current_user)):
+async def save_file(
+    req: SaveFileRequest,
+    user=Depends(get_current_user),
+    _=Depends(require_write_access)
+):
     safe_p = sanitize_path(req.path)
     if not safe_p:
         raise HTTPException(status_code=403, detail="Invalid path")
@@ -387,7 +481,11 @@ async def save_file(req: SaveFileRequest, user=Depends(get_current_user)):
 
 # --- ARCHIVES & ZIP STREAMING ---
 @app.post("/api/archive/compress")
-async def compress(req: CompressRequest, user=Depends(get_current_user)):
+async def compress(
+    req: CompressRequest,
+    user=Depends(get_current_user),
+    _=Depends(require_write_access)
+):
     safe_dir = sanitize_path(req.target_dir)
     if not safe_dir:
         raise HTTPException(status_code=403, detail="Invalid target directory")
@@ -398,7 +496,11 @@ async def compress(req: CompressRequest, user=Depends(get_current_user)):
         raise HTTPException(status_code=400, detail=str(e))
 
 @app.post("/api/archive/extract")
-async def extract(req: ExtractRequest, user=Depends(get_current_user)):
+async def extract(
+    req: ExtractRequest,
+    user=Depends(get_current_user),
+    _=Depends(require_write_access)
+):
     safe_archive = sanitize_path(req.archive_path)
     safe_dest = sanitize_path(req.dest_dir)
     if not safe_archive or not safe_dest:
@@ -447,7 +549,11 @@ async def system_power(req: PowerRequest, user=Depends(get_current_user)):
     return execute_power_command(req.action)
 
 @app.post("/api/system/terminal")
-async def system_terminal(req: TerminalRequest, user=Depends(get_current_user)):
+async def system_terminal(
+    req: TerminalRequest,
+    user=Depends(get_current_user),
+    _=Depends(require_write_access)
+):
     return run_terminal_command(req.command, req.cwd)
 
 # --- REAL-TIME REMOTE DESKTOP & MOUSE / KEYBOARD CONTROL ---

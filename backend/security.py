@@ -77,6 +77,26 @@ def verify_token(token: str) -> Optional[dict]:
     except Exception:
         return None
 
+# Write Access Tokens for File Modification Operations
+def create_write_token(expires_in_seconds: int = 3600) -> str:
+    """Create a signed JWT token granting file modification permissions."""
+    payload = {
+        "scope": "file_write_access",
+        "iat": time.time(),
+        "exp": time.time() + expires_in_seconds
+    }
+    return jwt.encode(payload, SECRET_KEY, algorithm=ALGORITHM)
+
+def verify_write_token(token: Optional[str]) -> bool:
+    """Verify if the provided token grants valid, unexpired write access."""
+    if not token or not isinstance(token, str):
+        return False
+    try:
+        decoded = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+        return decoded.get("scope") == "file_write_access"
+    except Exception:
+        return False
+
 # Strict Path Sanitization to prevent Path Traversal Attacks
 def sanitize_path(requested_path: str, allowed_roots: Optional[List[str]] = None) -> Optional[str]:
     try:
